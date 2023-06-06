@@ -95,3 +95,45 @@ class RNN(MLP):
         return tuple(( torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True),
                        torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True)))
 
+
+
+class BiRNN(MLP):
+    def __init__(self, args, num_inputs):
+        super(BiRNN, self).__init__(args, num_inputs)
+        self.nagents = self.args.nagents
+        self.hid_size = self.args.hid_size
+        del self.affine2
+        self.lstm_unit = nn.LSTM(self.hid_size, self.hid_size // 2, num_layers=2, bidirectional=True, batch_first=True)
+
+    def forward(self, x, info={}):
+        x, prev_hid = x
+        encoded_x = self.affine1(x)
+
+        if self.args.rnn_type == 'LSTM':
+            batch_size = encoded_x.size(0)
+            # encoded_x = encoded_x.view(batch_size * self.nagents, self.hid_size)
+            # print(encoded_x.shape)
+            output, (hn, cn) = self.lstm_unit(encoded_x)
+            # print(output.shape)
+            next_hid = output[0]
+            cell_state = output[0]
+            ret = (next_hid.clone(), cell_state.clone())
+            # print(next_hid.shape)
+            next_hid = next_hid.view(batch_size, self.nagents, self.hid_size)
+        else:
+            next_hid = F.tanh(self.affine2(prev_hid) + encoded_x)
+            ret = next_hid
+
+        v = self.value_head(next_hid)
+        if self.continuous:
+            action_mean = self.action_mean(next_hid)
+            action_log_std = self.action_log_std.expand_as(action_mean)
+            action_std = torch.exp(action_log_std)
+            return (action_mean, action_log_std, action_std), v, ret
+        else:
+            return [F.log_softmax(head(next_hid), dim=-1) for head in self.heads], v, ret
+
+    def init_hidden(self, batch_size):
+        # dim 0 = num of layers * num of direction
+        return tuple(( torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True),
+                       torch.zeros(batch_size * self.nagents, self.hid_size, requires_grad=True)))

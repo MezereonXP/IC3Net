@@ -13,6 +13,9 @@ from utils import *
 from action_utils import parse_action_args
 from trainer import Trainer
 from multi_processing import MultiProcessTrainer
+from multiprocessing import freeze_support
+
+freeze_support()
 
 torch.utils.backcompat.broadcast_warning.enabled = True
 torch.utils.backcompat.keepdim_warning.enabled = True
@@ -82,6 +85,8 @@ parser.add_argument('--commnet', action='store_true', default=False,
                     help="enable commnet model")
 parser.add_argument('--ic3net', action='store_true', default=False,
                     help="enable commnet model")
+parser.add_argument('--bi_ic3net', action='store_true', default=False,
+                    help="enable bi-ic3net model")
 parser.add_argument('--nagents', type=int, default=1,
                     help="Number of agents (used in multiagent)")
 parser.add_argument('--comm_mode', type=str, default='avg',
@@ -160,7 +165,6 @@ torch.manual_seed(args.seed)
 
 print(args)
 
-
 if args.commnet:
     policy_net = CommNetMLP(args, num_inputs)
 elif args.random:
@@ -169,6 +173,9 @@ elif args.recurrent:
     policy_net = RNN(args, num_inputs)
 else:
     policy_net = MLP(args, num_inputs)
+
+if args.bi_ic3net:
+    policy_net = BiRNN(args, num_inputs)
 
 if not args.display:
     display_models([policy_net])
